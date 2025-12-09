@@ -1,0 +1,102 @@
+name: Check Releases and Notify Telegram
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"  # every 6 hours
+  workflow_dispatch:
+
+jobs:
+  check-releases:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Install jq
+        run: sudo apt-get install -y jq
+
+      - name: Prepare list of repositories (EDIT THIS)
+        run: |
+          echo '[
+            "openai/openai-python",
+            "googleapis/python-genai",
+            "groq/groq-python",
+            "anthropics/anthropic-sdk-python"
+          ]' > repos.json
+
+      - name: Load cached last releases
+        id: cache-last
+        uses: actions/cache@v4
+        with:
+          path: last_releases.json
+          key: release-cache
+
+      - name: Initialize last_releases.json if missing
+        run: |
+          if [ ! -f last_releases.json ]; then
+            echo "{}" > last_releases.json
+          fi
+
+      - name: Check each repository
+        run: |
+          repos=$(jq -r '.[]' repos.json)
+
+          for repo in $repos; do
+            echo "Checking $repo..."
+
+            API="https://api.github.com/repos/$repo/releases/latest"
+            data=$(curl -s $API)
+
+            tag=$(echo "$data" | jq -r '.tag_name')
+            body=$(echo "$data" | jq -r '.body // ""')
+            html_url=$(echo "$data" | jq -r '.html_url')
+
+            # Skip repos without releases
+            if [ "$tag" = "null" ] || [ -z "$tag" ]; then
+              echo "No releases for $repo"
+              continue
+            fi
+
+            # Look up last-seen release
+            last_seen=$(jq -r --arg repo "$repo" '.[$repo]' last_releases.json)
+
+            if [ "$tag" != "$last_seen" ]; then
+              echo "NEW RELEASE for $repo: $tag"
+
+              # Escape body for Telegram Markdown
+              esc_body=$(echo "$body" | sed 's/[\`*_[]/\\&/g')
+
+              read -r -d '' message << EOF
+              📦 *$repo* has a new release!
+              *Tag:* \`$tag\`
+              
+              *Release notes:*
+              $esc_body
+              
+              🔗 [View Release]($html_url)
+              EOF
+
+              # Send Telegram message
+              curl -s -X POST \
+                "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+                -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+                -d message_thread_id="${{ secrets.TELEGRAM_TOPIC_ID }}" \
+                -d parse_mode="Markdown" \
+                --data-urlencode "text=$message"
+
+
+              # Update stored tag
+              jq --arg repo "$repo" --arg tag "$tag" '.[$repo] = $tag' last_releases.json > tmp.json
+              mv tmp.json last_releases.json
+            else
+              echo "No new release for $repo"
+            fi
+
+          done
+
+      - name: Save updated release cache
+        uses: actions/cache@v4
+        with:
+          path: last_releases.json
+          key: release-cache
