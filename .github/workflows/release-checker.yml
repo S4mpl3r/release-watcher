@@ -65,15 +65,12 @@ jobs:
               echo "NEW RELEASE for $repo: $tag"
 
               # Escape body for Telegram Markdown
-              esc_body=$(echo "$body" | sed 's/[\`*_[]/\\&/g')
+              # esc_body=$(echo "$body" | sed 's/[\`*_[]/\\&/g')
 
               message="📦 *$repo* has a new release!
-              *Tag:* \`$tag\`
+          *Tag:* \`$tag\`
               
-              *Release notes:*
-              $esc_body
-              
-              🔗 [View Release]($html_url)"
+          🔗 [View Release]($html_url)"
 
               # Send Telegram message
               curl -s -X POST \
