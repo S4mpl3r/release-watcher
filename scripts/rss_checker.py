@@ -86,8 +86,8 @@ def send_telegram_message(entry: dict, blog_name: str, dt_utc: datetime) -> bool
 
     # Construct Message
     message = (
-        f"📰 <a href='{link}'><b>{blog_name}</b></a>\n\n"
-        f"<b>{title}</b>\n\n"
+        f"📰 <b>{blog_name}</b>\n\n"
+        f"<a href='{link}'><b>{title}</b></a>\n\n"
         f"{summary_section}"
         f"📅 {published_display}\n"
     )
