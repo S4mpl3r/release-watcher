@@ -1,0 +1,89 @@
+name: Blog RSS Checker
+
+on:
+  schedule:
+    - cron: "30 2 * * *"
+    - cron: "30 14 * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Check Mode'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+        - all
+        - frequent
+
+permissions:
+  contents: read
+
+jobs:
+  check-blogs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          cache: 'pip' # Caches pip dependencies automatically
+
+      - name: Install dependencies
+        run: |
+          pip install -r scripts/requirements.txt
+
+      - name: Restore RSS history cache
+        id: restore-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: rss_history.json
+          # Use run_id in key to force a new cache save every run
+          key: rss-history-v1-${{ github.run_id }}
+          # Restore from the latest available cache with this prefix
+          restore-keys: |
+            rss-history-v1-
+      
+      - name: Initialize history if missing
+        run: |
+          if [ ! -f rss_history.json ]; then
+            echo "{}" > rss_history.json
+          fi
+
+      - name: Determine Check Mode
+        id: mode
+        run: |
+          # Get current hour in UTC
+          HOUR=$(date -u +%H)
+          
+          # Logic:
+          # 1. Manual trigger uses input
+          # 2. Before 12:00 UTC (The 02:30 run) -> mode 'all'
+          # 3. After 12:00 UTC (The 14:30 run) -> mode 'frequent'
+          
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "MODE=${{ inputs.mode }}" >> $GITHUB_ENV
+          elif [ "$HOUR" -lt 12 ]; then
+            echo "MODE=all" >> $GITHUB_ENV
+          else
+            echo "MODE=frequent" >> $GITHUB_ENV
+          fi
+
+      - name: Run RSS Checker
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_BLOG_TOPIC_ID: ${{ secrets.TELEGRAM_BLOG_TOPIC_ID }}
+        run: |
+          echo "Running in mode: $MODE"
+          python scripts/rss_checker.py --mode $MODE
+
+      # --- SAVE CACHE ---
+      - name: Save RSS history cache
+        uses: actions/cache/save@v4
+        if: always() # Save even if the script fails partway
+        with:
+          path: rss_history.json
+          key: rss-history-v1-${{ github.run_id }}
