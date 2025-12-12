@@ -1,0 +1,17 @@
+[
+  {
+    "name": "Simon Willison",
+    "url": "https://simonwillison.net/atom/everything/",
+    "frequency": "twice_daily"
+  },
+  {
+    "name": "Armin Ronacher",
+    "url": "https://lucumr.pocoo.org/feed.xml",
+    "frequency": "daily"
+  },
+  {
+    "name": "Mario Zechner",
+    "url": "https://mariozechner.at/rss.xml",
+    "frequency": "daily"
+  }
+]
