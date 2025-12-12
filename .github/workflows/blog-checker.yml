@@ -17,6 +17,7 @@ on:
 
 permissions:
   contents: read
+  actions: write
 
 jobs:
   check-blogs:
@@ -29,7 +30,7 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
-          cache: 'pip' # Caches pip dependencies automatically
+          cache: 'pip'
 
       - name: Install dependencies
         run: |
@@ -40,11 +41,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: rss_history.json
-          # Use run_id in key to force a new cache save every run
-          key: rss-history-v1-${{ github.run_id }}
-          # Restore from the latest available cache with this prefix
-          restore-keys: |
-            rss-history-v1-
+          key: rss-history-live
       
       - name: Initialize history if missing
         run: |
@@ -55,14 +52,7 @@ jobs:
       - name: Determine Check Mode
         id: mode
         run: |
-          # Get current hour in UTC
           HOUR=$(date -u +%H)
-          
-          # Logic:
-          # 1. Manual trigger uses input
-          # 2. Before 12:00 UTC (The 02:30 run) -> mode 'all'
-          # 3. After 12:00 UTC (The 14:30 run) -> mode 'frequent'
-          
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             echo "MODE=${{ inputs.mode }}" >> $GITHUB_ENV
           elif [ "$HOUR" -lt 12 ]; then
@@ -79,11 +69,19 @@ jobs:
         run: |
           echo "Running in mode: $MODE"
           python scripts/rss_checker.py --mode $MODE
+      
+      # 1. Delete the old cache so we can re-use the key
+      # We use '|| true' so the workflow doesn't fail if the cache doesn't exist yet (first run)
+      - name: Delete old cache
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh cache delete rss-history-live || true
 
-      # --- SAVE CACHE ---
+      # 2. Save the new cache with the SAME key
       - name: Save RSS history cache
         uses: actions/cache/save@v4
-        if: always() # Save even if the script fails partway
+        if: always()
         with:
           path: rss_history.json
-          key: rss-history-v1-${{ github.run_id }}
+          key: rss-history-live
