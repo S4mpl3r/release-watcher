@@ -16,7 +16,7 @@ jobs:
       - name: Install jq
         run: sudo apt-get install -y jq
 
-      - name: Prepare list of repositories (EDIT THIS)
+      - name: Prepare list of repositories
         run: |
           echo '[
             "openai/openai-python",
@@ -25,9 +25,9 @@ jobs:
             "anthropics/anthropic-sdk-python"
           ]' > repos.json
 
-      - name: Load cached last releases
+      - name: Restore cached last releases
         id: cache-last
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: last_releases.json
           key: release-cache
@@ -52,27 +52,24 @@ jobs:
             body=$(echo "$data" | jq -r '.body // ""')
             html_url=$(echo "$data" | jq -r '.html_url')
 
-            # Skip repos without releases
             if [ "$tag" = "null" ] || [ -z "$tag" ]; then
               echo "No releases for $repo"
               continue
             fi
 
-            # Look up last-seen release
             last_seen=$(jq -r --arg repo "$repo" '.[$repo]' last_releases.json)
 
             if [ "$tag" != "$last_seen" ]; then
               echo "NEW RELEASE for $repo: $tag"
 
-              # Escape body for Telegram Markdown
+              # Escape body if needed (optional)
               # esc_body=$(echo "$body" | sed 's/[\`*_[]/\\&/g')
 
               message="📦 *$repo* has a new release!
           *Tag:* \`$tag\`
-              
+          
           🔗 [View Release]($html_url)"
 
-              # Send Telegram message
               curl -s -X POST \
                 "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
                 -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
@@ -80,8 +77,6 @@ jobs:
                 -d parse_mode="Markdown" \
                 --data-urlencode "text=$message"
 
-
-              # Update stored tag
               jq --arg repo "$repo" --arg tag "$tag" '.[$repo] = $tag' last_releases.json > tmp.json
               mv tmp.json last_releases.json
             else
@@ -91,7 +86,7 @@ jobs:
           done
 
       - name: Save updated release cache
-        uses: actions/cache@v4
+        uses: actions/cache/save@v4
         with:
           path: last_releases.json
           key: release-cache
