@@ -2,6 +2,7 @@ import os
 import json
 import time
 import argparse
+from zoneinfo import ZoneInfo 
 from datetime import datetime, timedelta, timezone
 from dateutil import parser as date_parser
 import feedparser
@@ -10,6 +11,7 @@ from bs4 import BeautifulSoup
 
 CONFIG_FILE = "config/feeds.json"
 HISTORY_FILE = "rss_history.json"
+TARGET_TZ = ZoneInfo("Asia/Tehran")
 
 def clean_summary(html_content: str, word_limit: int = 50) -> str:
     if not html_content:
@@ -21,7 +23,41 @@ def clean_summary(html_content: str, word_limit: int = 50) -> str:
         return " ".join(words[:word_limit]) + "..."
     return " ".join(words)
 
-def send_telegram_message(entry: dict, blog_name: str) -> bool:
+def get_entry_date(entry) -> datetime:
+    """
+    Helper to extract, parse, and normalize the date to UTC.
+    Returns a datetime object or None.
+    """
+    if 'published' in entry:
+        date_str = entry.published
+    elif 'updated' in entry:
+        date_str = entry.updated
+    else:
+        return None
+
+    try:
+        dt = date_parser.parse(date_str)
+        # Ensure it is aware of timezone (UTC)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        else:
+            dt = dt.astimezone(timezone.utc)
+        return dt
+    except Exception:
+        return None
+
+def format_date_for_display(dt_utc: datetime) -> str:
+    """
+    Converts UTC datetime object to Target Timezone string.
+    """
+    try:
+        dt_local = dt_utc.astimezone(TARGET_TZ)
+        # Format: 2024-05-20 18:30
+        return dt_local.strftime('%Y-%m-%d %H:%M')
+    except Exception:
+        return "Unknown Date"
+
+def send_telegram_message(entry: dict, blog_name: str, dt_utc: datetime) -> bool:
     bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
     chat_id = os.environ.get("TELEGRAM_CHAT_ID")
     topic_id = os.environ.get("TELEGRAM_BLOG_TOPIC_ID")
@@ -32,24 +68,28 @@ def send_telegram_message(entry: dict, blog_name: str) -> bool:
 
     title = entry.get('title', 'No Title')
     link = entry.get('link', '')
-    published = entry.get('published', 'Unknown Date')
     
-    # Get and clean summary
+    # Get clean summary
     raw_summary = entry.get('summary', entry.get('description', ''))
     summary = clean_summary(raw_summary)
 
-    # Format summary as a quote if it exists
+    # Format summary as quote
     summary_section = ""
     if summary:
-        summary_section = f"<blockquote>{summary}</blockquote>\n\n"
+        summary_section = f"{summary}\n\n"
+
+    # Format Date to Tehran Time
+    if dt_utc:
+        published_display = format_date_for_display(dt_utc)
+    else:
+        published_display = "Unknown Date"
 
     # Construct Message
     message = (
-        f"📰 <b>{blog_name}</b>\n\n"
+        f"📰 <a href='{link}'><b>{blog_name}</b></a>\n\n"
         f"<b>{title}</b>\n\n"
         f"{summary_section}"
-        f"📅 {published}\n"
-        f"🔗 <a href='{link}'>Read Post</a>"
+        f"📅 {published_display}\n"
     )
 
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
@@ -76,7 +116,7 @@ def load_history() -> dict:
             return json.load(f)
     return {}
 
-def save_history(history) -> None:
+def save_history(history: dict) -> None:
     with open(HISTORY_FILE, 'w') as f:
         json.dump(history, f)
 
@@ -100,7 +140,6 @@ def check_feeds(mode: str) -> None:
         if name not in history:
             history[name] = []
 
-        # Logic: If running in "frequent" mode, skip blogs that aren't marked "twice_daily"
         if mode == "frequent" and frequency != "twice_daily":
             continue
 
@@ -111,46 +150,33 @@ def check_feeds(mode: str) -> None:
             print(f"Failed to parse {url}: {e}")
             continue
         
-        # Lookback window (backup safety net)
         hours_lookback = 30 
         time_threshold = now - timedelta(hours=hours_lookback)
 
         for entry in feed.entries:
-            # 1. Get Unique ID (prefer 'id', fallback to 'link')
             post_id = entry.get('id', entry.get('link'))
             
-            # 2. Check cache (history) to prevent duplicates
             if post_id in history[name]:
                 continue
 
-            # 3. Parse Date
-            if 'published' in entry:
-                entry_date_str = entry.published
-            elif 'updated' in entry:
-                entry_date_str = entry.updated
-            else:
+            # Parse the date using helper
+            entry_date = get_entry_date(entry)
+            
+            if not entry_date:
                 continue
 
-            try:
-                entry_date = date_parser.parse(entry_date_str)
-                if entry_date.tzinfo is None:
-                    entry_date = entry_date.replace(tzinfo=timezone.utc)
-                else:
-                    entry_date = entry_date.astimezone(timezone.utc)
-            except Exception:
-                continue
-
-            # 4. Check Time Window
+            # Check logic using UTC
             if entry_date > time_threshold:
                 print(f"New post found: {entry.get('title')}")
-                success = send_telegram_message(entry, name)
+                
+                # Pass the date object to the sender for formatting
+                success = send_telegram_message(entry, name, entry_date)
                 
                 if success:
                     history[name].append(post_id)
                     updated_history = True
-                    time.sleep(1) # Prevent rate limiting
+                    time.sleep(1)
 
-        # Keep history file small (last 20 posts per blog)
         if len(history[name]) > 20:
             history[name] = history[name][-20:]
 
