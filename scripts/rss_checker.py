@@ -152,6 +152,9 @@ def check_feeds(mode: str) -> None:
         
         hours_lookback = 30 
         time_threshold = now - timedelta(hours=hours_lookback)
+        
+        # Buffer to hold valid entries before sending
+        entries_to_send = []
 
         for entry in feed.entries:
             post_id = entry.get('id', entry.get('link'))
@@ -167,15 +170,24 @@ def check_feeds(mode: str) -> None:
 
             # Check logic using UTC
             if entry_date > time_threshold:
-                print(f"New post found: {entry.get('title')}")
-                
-                # Pass the date object to the sender for formatting
-                success = send_telegram_message(entry, name, entry_date)
-                
-                if success:
-                    history[name].append(post_id)
-                    updated_history = True
-                    time.sleep(1)
+                # Store tuple: (date, entry_object, post_id)
+                entries_to_send.append((entry_date, entry, post_id))
+
+        # Sort the collected entries by date (Oldest -> Newest)
+        # x[0] refers to entry_date
+        entries_to_send.sort(key=lambda x: x[0])
+
+        # Now iterate through the sorted list and send
+        for entry_date, entry, post_id in entries_to_send:
+            print(f"New post found: {entry.get('title')}")
+            
+            # Pass the date object to the sender for formatting
+            success = send_telegram_message(entry, name, entry_date)
+            
+            if success:
+                history[name].append(post_id)
+                updated_history = True
+                time.sleep(1)
 
         if len(history[name]) > 20:
             history[name] = history[name][-20:]
