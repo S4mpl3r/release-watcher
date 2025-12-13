@@ -128,7 +128,7 @@ def save_history(history: dict) -> None:
         json.dump(history, f)
 
 
-def check_feeds(mode: str) -> None:
+def check_feeds() -> None:
     if not os.path.exists(CONFIG_FILE):
         print(f"Error: Config file not found at {CONFIG_FILE}")
         return
@@ -143,25 +143,19 @@ def check_feeds(mode: str) -> None:
     for feed_config in feeds:
         name = feed_config["name"]
         url = feed_config["url"]
-        frequency = feed_config["frequency"]
+        check_hours = feed_config.get("check_hours", 24)
 
         if name not in history:
             history[name] = []
 
-        if mode == "frequent" and frequency != "twice_daily":
-            continue
-
-        print(f"Checking {name}...")
+        print(f"Checking {name} (lookback: {check_hours}h)...")
         try:
             feed = feedparser.parse(url)
         except Exception as e:
             print(f"Failed to parse {url}: {e}")
             continue
 
-        hours_lookback = 30
-        time_threshold = now - timedelta(hours=hours_lookback)
-
-        # Buffer to hold valid entries before sending
+        time_threshold = now - timedelta(hours=check_hours + 1)
         entries_to_send = []
 
         for entry in feed.entries:
@@ -170,26 +164,19 @@ def check_feeds(mode: str) -> None:
             if post_id in history[name]:
                 continue
 
-            # Parse the date using helper
             entry_date = get_entry_date(entry)
 
             if not entry_date:
                 continue
 
-            # Check logic using UTC
             if entry_date > time_threshold:
-                # Store tuple: (date, entry_object, post_id)
                 entries_to_send.append((entry_date, entry, post_id))
 
-        # Sort the collected entries by date (Oldest -> Newest)
-        # x[0] refers to entry_date
         entries_to_send.sort(key=lambda x: x[0])
 
-        # Now iterate through the sorted list and send
         for entry_date, entry, post_id in entries_to_send:
             print(f"New post found: {entry.get('title')}")
 
-            # Pass the date object to the sender for formatting
             success = send_telegram_message(entry, name, entry_date)
 
             if success:
@@ -205,7 +192,4 @@ def check_feeds(mode: str) -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--mode", choices=["all", "frequent"], required=True)
-    args = parser.parse_args()
-    check_feeds(args.mode)
+    check_feeds()

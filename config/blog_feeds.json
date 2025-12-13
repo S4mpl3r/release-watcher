@@ -2,16 +2,16 @@
   {
     "name": "Simon Willison",
     "url": "https://simonwillison.net/atom/everything/",
-    "frequency": "twice_daily"
+    "check_hours": 4
   },
   {
     "name": "Armin Ronacher",
     "url": "https://lucumr.pocoo.org/feed.xml",
-    "frequency": "daily"
+    "check_hours": 24
   },
   {
     "name": "Mario Zechner",
     "url": "https://mariozechner.at/rss.xml",
-    "frequency": "daily"
+    "check_hours": 24
   }
 ]
