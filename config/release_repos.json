@@ -1,0 +1,14 @@
+[
+  {
+    "repo": "openai/openai-python"
+  },
+  {
+    "repo": "googleapis/python-genai"
+  },
+  {
+    "repo": "groq/groq-python"
+  },
+  {
+    "repo": "anthropics/anthropic-sdk-python"
+  }
+]

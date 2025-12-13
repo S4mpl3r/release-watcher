@@ -1,92 +1,61 @@
-name: Check Releases and Notify Telegram
+name: GitHub Release Checker
 
 on:
   schedule:
-    - cron: "0 */6 * * *"  # every 6 hours
+    - cron: "0 */6 * * *"
   workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
 
 jobs:
   check-releases:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Check out
+      - name: Check out code
         uses: actions/checkout@v4
 
-      - name: Install jq
-        run: sudo apt-get install -y jq
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          cache: 'pip'
 
-      - name: Prepare list of repositories
+      - name: Install dependencies
         run: |
-          echo '[
-            "openai/openai-python",
-            "googleapis/python-genai",
-            "groq/groq-python",
-            "anthropics/anthropic-sdk-python"
-          ]' > repos.json
+          pip install -r scripts/requirements.txt
 
-      - name: Restore cached last releases
-        id: cache-last
+      - name: Restore release history cache
+        id: restore-cache
         uses: actions/cache/restore@v4
         with:
-          path: last_releases.json
-          key: release-cache
-
-      - name: Initialize last_releases.json if missing
+          path: release_history.json
+          key: release-history-live
+      
+      - name: Initialize history if missing
         run: |
-          if [ ! -f last_releases.json ]; then
-            echo "{}" > last_releases.json
+          if [ ! -f release_history.json ]; then
+            echo "{}" > release_history.json
           fi
 
-      - name: Check each repository
+      - name: Run Release Checker
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_RELEASE_TOPIC_ID: ${{ secrets.TELEGRAM_RELEASE_TOPIC_ID }}
         run: |
-          repos=$(jq -r '.[]' repos.json)
+          python scripts/release_checker.py
+      
+      - name: Delete old cache
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh cache delete release-history-live || true
 
-          for repo in $repos; do
-            echo "Checking $repo..."
-
-            API="https://api.github.com/repos/$repo/releases/latest"
-            data=$(curl -s $API)
-
-            tag=$(echo "$data" | jq -r '.tag_name')
-            body=$(echo "$data" | jq -r '.body // ""')
-            html_url=$(echo "$data" | jq -r '.html_url')
-
-            if [ "$tag" = "null" ] || [ -z "$tag" ]; then
-              echo "No releases for $repo"
-              continue
-            fi
-
-            last_seen=$(jq -r --arg repo "$repo" '.[$repo]' last_releases.json)
-
-            if [ "$tag" != "$last_seen" ]; then
-              echo "NEW RELEASE for $repo: $tag"
-
-              # Escape body if needed (optional)
-              # esc_body=$(echo "$body" | sed 's/[\`*_[]/\\&/g')
-
-              message="📦 *$repo* has a new release!
-          *Tag:* \`$tag\`
-          
-          🔗 [View Release]($html_url)"
-
-              curl -s -X POST \
-                "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
-                -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
-                -d message_thread_id="${{ secrets.TELEGRAM_TOPIC_ID }}" \
-                -d parse_mode="Markdown" \
-                --data-urlencode "text=$message"
-
-              jq --arg repo "$repo" --arg tag "$tag" '.[$repo] = $tag' last_releases.json > tmp.json
-              mv tmp.json last_releases.json
-            else
-              echo "No new release for $repo"
-            fi
-
-          done
-
-      - name: Save updated release cache
+      - name: Save release history cache
         uses: actions/cache/save@v4
+        if: always()
         with:
-          path: last_releases.json
-          key: release-cache
+          path: release_history.json
+          key: release-history-live
