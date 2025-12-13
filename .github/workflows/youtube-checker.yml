@@ -2,18 +2,8 @@ name: YouTube RSS Checker
 
 on:
   schedule:
-    - cron: "30 2 * * *"
-    - cron: "30 14 * * *"
+    - cron: "0 */6 * * *"
   workflow_dispatch:
-    inputs:
-      mode:
-        description: 'Check Mode'
-        required: true
-        default: 'all'
-        type: choice
-        options:
-        - all
-        - frequent
 
 permissions:
   contents: read
@@ -49,26 +39,13 @@ jobs:
             echo "{}" > youtube_history.json
           fi
 
-      - name: Determine Check Mode
-        id: mode
-        run: |
-          HOUR=$(date -u +%H)
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            echo "MODE=${{ inputs.mode }}" >> $GITHUB_ENV
-          elif [ "$HOUR" -lt 12 ]; then
-            echo "MODE=all" >> $GITHUB_ENV
-          else
-            echo "MODE=frequent" >> $GITHUB_ENV
-          fi
-
       - name: Run YouTube Checker
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           TELEGRAM_YOUTUBE_TOPIC_ID: ${{ secrets.TELEGRAM_YOUTUBE_TOPIC_ID }}
         run: |
-          echo "Running in mode: $MODE"
-          python scripts/youtube_checker.py --mode $MODE
+          python scripts/youtube_checker.py
       
       - name: Delete old cache
         env:

@@ -1,4 +1,3 @@
-import argparse
 import json
 import os
 import time
@@ -48,7 +47,7 @@ def get_entry_date(entry) -> datetime:
 def format_date_for_display(dt_utc: datetime) -> str:
     try:
         dt_local = dt_utc.astimezone(TARGET_TZ)
-        return dt_local.strftime("%Y-%m-%d %H:%M")
+        return dt_local.strftime("%Y-%m-%d %H:%M").replace(":", "&#58;")
     except Exception:
         return "Unknown Date"
 
@@ -65,29 +64,11 @@ def send_telegram_message(entry: dict, channel_name: str, dt_utc: datetime) -> b
     title = entry.get("title", "No Title")
     link = entry.get("link", "")
 
-    video_id = entry.get("yt_videoid", "")
-    thumbnail_url = ""
-    if video_id:
-        thumbnail_url = f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
-    elif hasattr(entry, "media_thumbnail") and entry.media_thumbnail:
-        thumbnail_url = entry.media_thumbnail[0]["url"]
-
-    raw_summary = ""
-    if hasattr(entry, "media_description"):
-        raw_summary = entry.media_description
-    else:
-        raw_summary = entry.get("summary", entry.get("description", ""))
-
+    raw_summary = entry.get("summary", entry.get("description", ""))
     summary = clean_summary(raw_summary, word_limit=80)
 
-    summary_section = ""
-    if summary:
-        summary_section = f"{summary}\n\n"
-
-    if dt_utc:
-        published_display = format_date_for_display(dt_utc)
-    else:
-        published_display = "Unknown Date"
+    summary_section = f"{summary}\n\n" if summary else ""
+    published_display = format_date_for_display(dt_utc) if dt_utc else "Unknown Date"
 
     message = (
         f"🎥 <b>{channel_name}</b>\n\n"
@@ -127,7 +108,7 @@ def save_history(history: dict) -> None:
         json.dump(history, f)
 
 
-def check_feeds(mode: str) -> None:
+def check_feeds() -> None:
     if not os.path.exists(CONFIG_FILE):
         print(f"Error: Config file not found at {CONFIG_FILE}")
         return
@@ -142,13 +123,9 @@ def check_feeds(mode: str) -> None:
     for feed_config in feeds:
         name = feed_config["name"]
         url = feed_config["url"]
-        frequency = feed_config["frequency"]
 
         if name not in history:
             history[name] = []
-
-        if mode == "frequent" and frequency != "twice_daily":
-            continue
 
         print(f"Checking {name}...")
         try:
@@ -196,7 +173,4 @@ def check_feeds(mode: str) -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--mode", choices=["all", "frequent"], required=True)
-    args = parser.parse_args()
-    check_feeds(args.mode)
+    check_feeds()

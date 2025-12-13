@@ -1,17 +1,14 @@
 [
   {
     "name": "Lex Fridman",
-    "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCSHZKyawb77ixDdsGog4iWA",
-    "frequency": "twice_daily"
+    "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCSHZKyawb77ixDdsGog4iWA"
   },
   {
-    "name": "Fireship",
-    "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCsBjURrPoezykLs9EqgamOA",
-    "frequency": "twice_daily"
+    "name": "Latent Space",
+    "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCxBcwypKK-W3GHd_RZ9FZrQ"
   },
   {
     "name": "ArjanCodes",
-    "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCVhQ2NnY5Rskt6UjCUkJ_DA",
-    "frequency": "twice_daily"
+    "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCVhQ2NnY5Rskt6UjCUkJ_DA"
   }
 ]
