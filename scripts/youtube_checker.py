@@ -52,6 +52,25 @@ def format_date_for_display(dt_utc: datetime) -> str:
         return "Unknown Date"
 
 
+def is_youtube_short(entry: dict) -> bool:
+    """
+    Check if the entry is a YouTube Short by examining the URL and title.
+    Returns True if it's a Short, False if it's a regular video.
+    """
+    link = entry.get("link", "")
+    title = entry.get("title", "")
+
+    # Check URL for shorts pattern
+    if "/shorts/" in link:
+        return True
+
+    # Check title for #shorts hashtag
+    if "#shorts" in title.lower():
+        return True
+
+    return False
+
+
 def send_telegram_message(entry: dict, channel_name: str, dt_utc: datetime) -> bool:
     bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
     chat_id = os.environ.get("TELEGRAM_CHAT_ID")
@@ -148,6 +167,11 @@ def check_feeds() -> None:
             entry_date = get_entry_date(entry)
 
             if not entry_date:
+                continue
+
+            # Skip YouTube Shorts
+            if is_youtube_short(entry):
+                print(f"Skipping YouTube Short: {entry.get('title')}")
                 continue
 
             if entry_date > time_threshold:
