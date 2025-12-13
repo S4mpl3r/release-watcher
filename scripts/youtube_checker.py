@@ -47,7 +47,9 @@ def get_entry_date(entry) -> datetime:
 def format_date_for_display(dt_utc: datetime) -> str:
     try:
         dt_local = dt_utc.astimezone(TARGET_TZ)
-        return dt_local.strftime("%Y-%m-%d %H:%M").replace(":", "&#58;")
+        # We inject \u200b (Zero Width Space) before the colon
+        # to break Telegram's auto-timestamp linking
+        return dt_local.strftime("%Y-%m-%d %H\u200b:%M")
     except Exception:
         return "Unknown Date"
 
