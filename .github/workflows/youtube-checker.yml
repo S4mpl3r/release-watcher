@@ -1,0 +1,84 @@
+name: YouTube RSS Checker
+
+on:
+  schedule:
+    - cron: "30 2 * * *"
+    - cron: "30 14 * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Check Mode'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+        - all
+        - frequent
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  check-youtube:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r scripts/requirements.txt
+
+      - name: Restore YouTube history cache
+        id: restore-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: youtube_history.json
+          key: youtube-history-live
+      
+      - name: Initialize history if missing
+        run: |
+          if [ ! -f youtube_history.json ]; then
+            echo "{}" > youtube_history.json
+          fi
+
+      - name: Determine Check Mode
+        id: mode
+        run: |
+          HOUR=$(date -u +%H)
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "MODE=${{ inputs.mode }}" >> $GITHUB_ENV
+          elif [ "$HOUR" -lt 12 ]; then
+            echo "MODE=all" >> $GITHUB_ENV
+          else
+            echo "MODE=frequent" >> $GITHUB_ENV
+          fi
+
+      - name: Run YouTube Checker
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_YOUTUBE_TOPIC_ID: ${{ secrets.TELEGRAM_YOUTUBE_TOPIC_ID }}
+        run: |
+          echo "Running in mode: $MODE"
+          python scripts/youtube_checker.py --mode $MODE
+      
+      - name: Delete old cache
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh cache delete youtube-history-live || true
+
+      - name: Save YouTube history cache
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: youtube_history.json
+          key: youtube-history-live

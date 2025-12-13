@@ -1,0 +1,17 @@
+[
+  {
+    "name": "Lex Fridman",
+    "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCSHZKyawb77ixDdsGog4iWA",
+    "frequency": "twice_daily"
+  },
+  {
+    "name": "Fireship",
+    "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCsBjURrPoezykLs9EqgamOA",
+    "frequency": "twice_daily"
+  },
+  {
+    "name": "ArjanCodes",
+    "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCVhQ2NnY5Rskt6UjCUkJ_DA",
+    "frequency": "twice_daily"
+  }
+]

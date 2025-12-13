@@ -10,8 +10,8 @@ import requests
 from bs4 import BeautifulSoup
 from dateutil import parser as date_parser
 
-CONFIG_FILE = "config/blog_feeds.json"
-HISTORY_FILE = "rss_history.json"
+CONFIG_FILE = "config/youtube_feeds.json"
+HISTORY_FILE = "youtube_history.json"
 TARGET_TZ = ZoneInfo("Asia/Tehran")
 
 
@@ -27,10 +27,6 @@ def clean_summary(html_content: str, word_limit: int = 50) -> str:
 
 
 def get_entry_date(entry) -> datetime:
-    """
-    Helper to extract, parse, and normalize the date to UTC.
-    Returns a datetime object or None.
-    """
     if "published" in entry:
         date_str = entry.published
     elif "updated" in entry:
@@ -40,7 +36,6 @@ def get_entry_date(entry) -> datetime:
 
     try:
         dt = date_parser.parse(date_str)
-        # Ensure it is aware of timezone (UTC)
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
         else:
@@ -51,21 +46,17 @@ def get_entry_date(entry) -> datetime:
 
 
 def format_date_for_display(dt_utc: datetime) -> str:
-    """
-    Converts UTC datetime object to Target Timezone string.
-    """
     try:
         dt_local = dt_utc.astimezone(TARGET_TZ)
-        # Format: 2024-05-20 18:30
         return dt_local.strftime("%Y-%m-%d %H:%M")
     except Exception:
         return "Unknown Date"
 
 
-def send_telegram_message(entry: dict, blog_name: str, dt_utc: datetime) -> bool:
+def send_telegram_message(entry: dict, channel_name: str, dt_utc: datetime) -> bool:
     bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
     chat_id = os.environ.get("TELEGRAM_CHAT_ID")
-    topic_id = os.environ.get("TELEGRAM_BLOG_TOPIC_ID")
+    topic_id = os.environ.get("TELEGRAM_YOUTUBE_TOPIC_ID")
 
     if not bot_token or not chat_id:
         print("Error: Missing Telegram secrets.")
@@ -74,24 +65,32 @@ def send_telegram_message(entry: dict, blog_name: str, dt_utc: datetime) -> bool
     title = entry.get("title", "No Title")
     link = entry.get("link", "")
 
-    # Get clean summary
-    raw_summary = entry.get("summary", entry.get("description", ""))
-    summary = clean_summary(raw_summary)
+    video_id = entry.get("yt_videoid", "")
+    thumbnail_url = ""
+    if video_id:
+        thumbnail_url = f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
+    elif hasattr(entry, "media_thumbnail") and entry.media_thumbnail:
+        thumbnail_url = entry.media_thumbnail[0]["url"]
 
-    # Format summary as quote
+    raw_summary = ""
+    if hasattr(entry, "media_description"):
+        raw_summary = entry.media_description
+    else:
+        raw_summary = entry.get("summary", entry.get("description", ""))
+
+    summary = clean_summary(raw_summary, word_limit=80)
+
     summary_section = ""
     if summary:
         summary_section = f"{summary}\n\n"
 
-    # Format Date to Tehran Time
     if dt_utc:
         published_display = format_date_for_display(dt_utc)
     else:
         published_display = "Unknown Date"
 
-    # Construct Message
     message = (
-        f"📰 <b>{blog_name}</b>\n\n"
+        f"🎥 <b>{channel_name}</b>\n\n"
         f"<a href='{link}'><b>{title}</b></a>\n\n"
         f"{summary_section}"
         f"📅 {published_display}\n"
@@ -161,7 +160,6 @@ def check_feeds(mode: str) -> None:
         hours_lookback = 30
         time_threshold = now - timedelta(hours=hours_lookback)
 
-        # Buffer to hold valid entries before sending
         entries_to_send = []
 
         for entry in feed.entries:
@@ -170,26 +168,19 @@ def check_feeds(mode: str) -> None:
             if post_id in history[name]:
                 continue
 
-            # Parse the date using helper
             entry_date = get_entry_date(entry)
 
             if not entry_date:
                 continue
 
-            # Check logic using UTC
             if entry_date > time_threshold:
-                # Store tuple: (date, entry_object, post_id)
                 entries_to_send.append((entry_date, entry, post_id))
 
-        # Sort the collected entries by date (Oldest -> Newest)
-        # x[0] refers to entry_date
         entries_to_send.sort(key=lambda x: x[0])
 
-        # Now iterate through the sorted list and send
         for entry_date, entry, post_id in entries_to_send:
-            print(f"New post found: {entry.get('title')}")
+            print(f"New video found: {entry.get('title')}")
 
-            # Pass the date object to the sender for formatting
             success = send_telegram_message(entry, name, entry_date)
 
             if success:
