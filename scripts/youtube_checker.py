@@ -115,7 +115,11 @@ def generate_ai_summary(link: str | None) -> str:
         ),
         contents=[
             types.Content(
-                role="user", parts=[types.Part(file_data=types.FileData(file_uri=link))]
+                role="user",
+                parts=[
+                    types.Part(file_data=types.FileData(file_uri=link)),
+                    types.Part.from_text(text="Summarize this video."),
+                ],
             )
         ],
     )
@@ -248,7 +252,7 @@ def check_feeds() -> None:
 
             if video_id:
                 try:
-                    print("Attempting to generate summary...")
+                    print(f"Attempting to generate summary for {entry.get('link')}...")
                     ai_summary = generate_ai_summary(entry.get("link"))
                     if ai_summary:
                         final_summary = f"✨ <b>AI Summary:</b>\n{ai_summary}"
