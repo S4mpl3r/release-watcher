@@ -10,13 +10,7 @@ import requests
 from bs4 import BeautifulSoup
 from dateutil import parser as date_parser
 from google.genai import Client, types
-
-# New imports
-from youtube_transcript_api import (
-    NoTranscriptFound,
-    TranscriptsDisabled,
-    YouTubeTranscriptApi,
-)
+from youtube_transcript_api import YouTubeTranscriptApi
 
 CONFIG_FILE = "config/youtube_feeds.json"
 HISTORY_FILE = "youtube_history.json"
@@ -26,7 +20,6 @@ TARGET_TZ = ZoneInfo("Asia/Tehran")
 
 
 def clean_summary(html_content: str, word_limit: int = 50) -> str:
-    """Fallback function to clean HTML description."""
     if not html_content:
         return ""
     soup = BeautifulSoup(html_content, "html.parser")
@@ -75,14 +68,12 @@ def is_youtube_short(entry: dict) -> bool:
 
 
 def get_video_id_from_entry(entry: dict) -> str:
-    """Extracts YouTube Video ID from the feed entry."""
-    # Method 1: yt_videoid extension often present in RSS
+    # Method 1: yt_videoid extension
     if "yt_videoid" in entry:
         return entry.yt_videoid
 
     # Method 2: Extract from link
     link = entry.get("link", "")
-    # Standard format: https://www.youtube.com/watch?v=VIDEO_ID
     match = re.search(r"[?&]v=([^&]+)", link)
     if match:
         return match.group(1)
@@ -95,26 +86,37 @@ def get_video_id_from_entry(entry: dict) -> str:
 
 def get_transcript_text(video_id: str) -> str:
     """
-    Fetches English transcript.
-    Raises specific exceptions if not found so we can catch them.
+    ytt_api = YouTubeTranscriptApi()
+    transcript = ytt_api.fetch(video_id)
     """
     try:
-        # Fetch transcript only in English
-        transcript_list = YouTubeTranscriptApi.get_transcript(
-            video_id, languages=["en"]
-        )
+        ytt_api = YouTubeTranscriptApi()
 
-        # Join all text parts
-        full_text = " ".join([item["text"] for item in transcript_list])
+        transcript_obj = ytt_api.fetch(video_id)
+
+        # Iterate over the object as per your docs:
+        # "for snippet in fetched_transcript: print(snippet.text)"
+        text_parts = []
+        for snippet in transcript_obj:
+            if hasattr(snippet, "text"):
+                text_parts.append(snippet.text)
+            elif isinstance(snippet, dict) and "text" in snippet:
+                # Fallback in case it returns raw dicts
+                text_parts.append(snippet["text"])
+
+        full_text = " ".join(text_parts)
+
+        if not full_text.strip():
+            raise ValueError("Transcript was empty.")
+
         return full_text
-    except (TranscriptsDisabled, NoTranscriptFound):
-        raise ValueError("No English transcript available.")
+
     except Exception as e:
-        raise e
+        # Catch generic exceptions to ensure fallback works
+        raise ValueError(f"Transcript fetch failed: {e}")
 
 
 def generate_ai_summary(transcript_text: str) -> str:
-    """Generates a summary using Gemini."""
     api_key = os.environ.get("GOOGLE_API_KEY")
     if not api_key:
         raise ValueError("GOOGLE_API_KEY is missing.")
@@ -126,11 +128,11 @@ def generate_ai_summary(transcript_text: str) -> str:
         "Strict Constraints:\n"
         "1. The summary must be in English.\n"
         "2. Maximum length is 2 short paragraphs.\n"
-        "3. Be direct. Do NOT start with preamble like 'The video discusses', 'Here is a summary', or 'In this video'. Start directly with the content.\n"
+        "3. Be direct. Do NOT start with preamble like 'The video discusses'.\n"
         "4. Do NOT include a conclusion.\n"
-        "5. Focus on the core insights, arguments, and takeaways.\n"
-        "6. Do not use Markdown headers (like ## or **), just plain text paragraphs."
+        "5. Focus on the core insights and takeaways.\n"
     )
+
     response = client.models.generate_content(
         model="gemini-2.5-flash",
         config=types.GenerateContentConfig(
@@ -167,7 +169,6 @@ def send_telegram_message(
     title = entry.get("title", "No Title")
     link = entry.get("link", "")
 
-    # Format the message
     summary_section = f"{summary_text}\n\n" if summary_text else ""
     published_display = format_date_for_display(dt_utc) if dt_utc else "Unknown Date"
 
@@ -270,7 +271,6 @@ def check_feeds() -> None:
             # --- AI Summary Logic ---
             final_summary = ""
             video_id = get_video_id_from_entry(entry)
-
             used_fallback = True
 
             if video_id:
@@ -285,18 +285,15 @@ def check_feeds() -> None:
                             final_summary = f"✨ <b>AI Summary:</b>\n{ai_summary}"
                             used_fallback = False
                 except Exception as e:
-                    # Captures: NoTranscriptFound, TranscriptsDisabled, Google API errors, etc.
                     print(
                         f"AI Summary skipped due to: {e}. Reverting to standard description."
                     )
                     used_fallback = True
 
-            # Fallback if AI failed or video ID missing
             if used_fallback:
                 raw_summary = entry.get("summary", entry.get("description", ""))
                 final_summary = clean_summary(raw_summary, word_limit=80)
 
-            # --- Send Message ---
             success = send_telegram_message(entry, name, entry_date, final_summary)
 
             if success:
