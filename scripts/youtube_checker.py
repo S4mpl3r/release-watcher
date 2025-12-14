@@ -10,7 +10,6 @@ import requests
 from bs4 import BeautifulSoup
 from dateutil import parser as date_parser
 from google.genai import Client, types
-from youtube_transcript_api import YouTubeTranscriptApi
 
 CONFIG_FILE = "config/youtube_feeds.json"
 HISTORY_FILE = "youtube_history.json"
@@ -84,39 +83,9 @@ def get_video_id_from_entry(entry: dict) -> str:
 # --- AI & Transcript Functions ---
 
 
-def get_transcript_text(video_id: str) -> str:
-    """
-    ytt_api = YouTubeTranscriptApi()
-    transcript = ytt_api.fetch(video_id)
-    """
-    try:
-        ytt_api = YouTubeTranscriptApi()
-
-        transcript_obj = ytt_api.fetch(video_id)
-
-        # Iterate over the object as per your docs:
-        # "for snippet in fetched_transcript: print(snippet.text)"
-        text_parts = []
-        for snippet in transcript_obj:
-            if hasattr(snippet, "text"):
-                text_parts.append(snippet.text)
-            elif isinstance(snippet, dict) and "text" in snippet:
-                # Fallback in case it returns raw dicts
-                text_parts.append(snippet["text"])
-
-        full_text = " ".join(text_parts)
-
-        if not full_text.strip():
-            raise ValueError("Transcript was empty.")
-
-        return full_text
-
-    except Exception as e:
-        # Catch generic exceptions to ensure fallback works
-        raise ValueError(f"Transcript fetch failed: {e}")
-
-
-def generate_ai_summary(transcript_text: str) -> str:
+def generate_ai_summary(link: str | None) -> str:
+    if not link:
+        raise ValueError(f"Invalid link: {link}")
     api_key = os.environ.get("GOOGLE_API_KEY")
     if not api_key:
         raise ValueError("GOOGLE_API_KEY is missing.")
@@ -124,7 +93,7 @@ def generate_ai_summary(transcript_text: str) -> str:
     client = Client(api_key=api_key)
 
     system_prompt = (
-        "You are an expert content summarizer. Your task is to summarize the following YouTube video transcript. "
+        "You are an expert content summarizer. Your task is to summarize the following YouTube video. "
         "Strict Constraints:\n"
         "1. The summary must be in English.\n"
         "2. Maximum length is 2 short paragraphs.\n"
@@ -144,7 +113,11 @@ def generate_ai_summary(transcript_text: str) -> str:
                 thinking_budget=4096,
             ),
         ),
-        contents=transcript_text,
+        contents=[
+            types.Content(
+                role="user", parts=[types.Part(file_data=types.FileData(file_uri=link))]
+            )
+        ],
     )
 
     if response.text:
@@ -275,15 +248,11 @@ def check_feeds() -> None:
 
             if video_id:
                 try:
-                    print(f"Attempting to fetch transcript for {video_id}...")
-                    transcript = get_transcript_text(video_id)
-
-                    if transcript:
-                        print("Transcript found. Generating AI summary...")
-                        ai_summary = generate_ai_summary(transcript)
-                        if ai_summary:
-                            final_summary = f"✨ <b>AI Summary:</b>\n{ai_summary}"
-                            used_fallback = False
+                    print("Attempting to generate summary...")
+                    ai_summary = generate_ai_summary(entry.get("link"))
+                    if ai_summary:
+                        final_summary = f"✨ <b>AI Summary:</b>\n{ai_summary}"
+                        used_fallback = False
                 except Exception as e:
                     print(
                         f"AI Summary skipped due to: {e}. Reverting to standard description."
