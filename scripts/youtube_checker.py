@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import time
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -8,13 +9,24 @@ import feedparser
 import requests
 from bs4 import BeautifulSoup
 from dateutil import parser as date_parser
+from google.genai import Client, types
+
+# New imports
+from youtube_transcript_api import (
+    NoTranscriptFound,
+    TranscriptsDisabled,
+    YouTubeTranscriptApi,
+)
 
 CONFIG_FILE = "config/youtube_feeds.json"
 HISTORY_FILE = "youtube_history.json"
 TARGET_TZ = ZoneInfo("Asia/Tehran")
 
+# --- Helper Functions ---
+
 
 def clean_summary(html_content: str, word_limit: int = 50) -> str:
+    """Fallback function to clean HTML description."""
     if not html_content:
         return ""
     soup = BeautifulSoup(html_content, "html.parser")
@@ -47,33 +59,103 @@ def get_entry_date(entry) -> datetime:
 def format_date_for_display(dt_utc: datetime) -> str:
     try:
         dt_local = dt_utc.astimezone(TARGET_TZ)
-        # We inject \u200b (Zero Width Space) before the colon
-        # to break Telegram's auto-timestamp linking
         return dt_local.strftime("%Y-%m-%d %H\u200b:%M")
     except Exception:
         return "Unknown Date"
 
 
 def is_youtube_short(entry: dict) -> bool:
-    """
-    Check if the entry is a YouTube Short by examining the URL and title.
-    Returns True if it's a Short, False if it's a regular video.
-    """
     link = entry.get("link", "")
     title = entry.get("title", "")
-
-    # Check URL for shorts pattern
     if "/shorts/" in link:
         return True
-
-    # Check title for #shorts hashtag
     if "#shorts" in title.lower():
         return True
-
     return False
 
 
-def send_telegram_message(entry: dict, channel_name: str, dt_utc: datetime) -> bool:
+def get_video_id_from_entry(entry: dict) -> str:
+    """Extracts YouTube Video ID from the feed entry."""
+    # Method 1: yt_videoid extension often present in RSS
+    if "yt_videoid" in entry:
+        return entry.yt_videoid
+
+    # Method 2: Extract from link
+    link = entry.get("link", "")
+    # Standard format: https://www.youtube.com/watch?v=VIDEO_ID
+    match = re.search(r"[?&]v=([^&]+)", link)
+    if match:
+        return match.group(1)
+
+    return None
+
+
+# --- AI & Transcript Functions ---
+
+
+def get_transcript_text(video_id: str) -> str:
+    """
+    Fetches English transcript.
+    Raises specific exceptions if not found so we can catch them.
+    """
+    try:
+        # Fetch transcript only in English
+        transcript_list = YouTubeTranscriptApi.get_transcript(
+            video_id, languages=["en"]
+        )
+
+        # Join all text parts
+        full_text = " ".join([item["text"] for item in transcript_list])
+        return full_text
+    except (TranscriptsDisabled, NoTranscriptFound):
+        raise ValueError("No English transcript available.")
+    except Exception as e:
+        raise e
+
+
+def generate_ai_summary(transcript_text: str) -> str:
+    """Generates a summary using Gemini."""
+    api_key = os.environ.get("GOOGLE_API_KEY")
+    if not api_key:
+        raise ValueError("GOOGLE_API_KEY is missing.")
+
+    client = Client(api_key=api_key)
+
+    system_prompt = (
+        "You are an expert content summarizer. Your task is to summarize the following YouTube video transcript. "
+        "Strict Constraints:\n"
+        "1. The summary must be in English.\n"
+        "2. Maximum length is 2 short paragraphs.\n"
+        "3. Be direct. Do NOT start with preamble like 'The video discusses', 'Here is a summary', or 'In this video'. Start directly with the content.\n"
+        "4. Do NOT include a conclusion.\n"
+        "5. Focus on the core insights, arguments, and takeaways.\n"
+        "6. Do not use Markdown headers (like ## or **), just plain text paragraphs."
+    )
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        config=types.GenerateContentConfig(
+            system_instruction=system_prompt,
+            temperature=0.7,
+            max_output_tokens=8192,
+            thinking_config=types.ThinkingConfig(
+                include_thoughts=False,
+                thinking_budget=4096,
+            ),
+        ),
+        contents=transcript_text,
+    )
+
+    if response.text:
+        return response.text.strip()
+    return ""
+
+
+# --- Notification Function ---
+
+
+def send_telegram_message(
+    entry: dict, channel_name: str, dt_utc: datetime, summary_text: str
+) -> bool:
     bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
     chat_id = os.environ.get("TELEGRAM_CHAT_ID")
     topic_id = os.environ.get("TELEGRAM_YOUTUBE_TOPIC_ID")
@@ -85,10 +167,8 @@ def send_telegram_message(entry: dict, channel_name: str, dt_utc: datetime) -> b
     title = entry.get("title", "No Title")
     link = entry.get("link", "")
 
-    raw_summary = entry.get("summary", entry.get("description", ""))
-    summary = clean_summary(raw_summary, word_limit=80)
-
-    summary_section = f"{summary}\n\n" if summary else ""
+    # Format the message
+    summary_section = f"{summary_text}\n\n" if summary_text else ""
     published_display = format_date_for_display(dt_utc) if dt_utc else "Unknown Date"
 
     message = (
@@ -115,6 +195,9 @@ def send_telegram_message(entry: dict, channel_name: str, dt_utc: datetime) -> b
     except Exception as e:
         print(f"Failed to send Telegram message: {e}")
         return False
+
+
+# --- Main Logic ---
 
 
 def load_history() -> dict:
@@ -171,7 +254,6 @@ def check_feeds() -> None:
             if not entry_date:
                 continue
 
-            # Skip YouTube Shorts
             if is_youtube_short(entry):
                 print(f"Skipping YouTube Short: {entry.get('title')}")
                 continue
@@ -182,9 +264,40 @@ def check_feeds() -> None:
         entries_to_send.sort(key=lambda x: x[0])
 
         for entry_date, entry, post_id in entries_to_send:
-            print(f"New video found: {entry.get('title')}")
+            title = entry.get("title")
+            print(f"New video found: {title}")
 
-            success = send_telegram_message(entry, name, entry_date)
+            # --- AI Summary Logic ---
+            final_summary = ""
+            video_id = get_video_id_from_entry(entry)
+
+            used_fallback = True
+
+            if video_id:
+                try:
+                    print(f"Attempting to fetch transcript for {video_id}...")
+                    transcript = get_transcript_text(video_id)
+
+                    if transcript:
+                        print("Transcript found. Generating AI summary...")
+                        ai_summary = generate_ai_summary(transcript)
+                        if ai_summary:
+                            final_summary = f"✨ <b>AI Summary:</b>\n{ai_summary}"
+                            used_fallback = False
+                except Exception as e:
+                    # Captures: NoTranscriptFound, TranscriptsDisabled, Google API errors, etc.
+                    print(
+                        f"AI Summary skipped due to: {e}. Reverting to standard description."
+                    )
+                    used_fallback = True
+
+            # Fallback if AI failed or video ID missing
+            if used_fallback:
+                raw_summary = entry.get("summary", entry.get("description", ""))
+                final_summary = clean_summary(raw_summary, word_limit=80)
+
+            # --- Send Message ---
+            success = send_telegram_message(entry, name, entry_date, final_summary)
 
             if success:
                 history[name].append(post_id)
