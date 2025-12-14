@@ -250,18 +250,18 @@ def check_feeds() -> None:
             video_id = get_video_id_from_entry(entry)
             used_fallback = True
 
-            if video_id:
-                try:
-                    print(f"Attempting to generate summary for {entry.get('link')}...")
-                    ai_summary = generate_ai_summary(entry.get("link"))
-                    if ai_summary:
-                        final_summary = f"✨ <b>AI Summary:</b>\n{ai_summary}"
-                        used_fallback = False
-                except Exception as e:
-                    print(
-                        f"AI Summary skipped due to: {e}. Reverting to standard description."
-                    )
-                    used_fallback = True
+            # if video_id:
+            #     try:
+            #         print(f"Attempting to generate summary for {entry.get('link')}...")
+            #         ai_summary = generate_ai_summary(entry.get("link"))
+            #         if ai_summary:
+            #             final_summary = f"✨ <b>AI Summary:</b>\n{ai_summary}"
+            #             used_fallback = False
+            #     except Exception as e:
+            #         print(
+            #             f"AI Summary skipped due to: {e}. Reverting to standard description."
+            #         )
+            #         used_fallback = True
 
             if used_fallback:
                 raw_summary = entry.get("summary", entry.get("description", ""))
