@@ -77,14 +77,12 @@ def send_telegram_message(
     original_link = entry.get("link", "")
     
     # Instant View Logic
-    final_link = original_link
+    preview_link = original_link
     if rhash and original_link:
-        # Encode original link if necessary, but usually raw works with Telegram if clean.
-        # Ideally we should urllib.parse.quote it, but let's trust requests/telegram to handle basic URLs.
-        # Actually, best to be safe with urllib.parse.quote for the query param.
+        # Encode original link if necessary
         import urllib.parse
         encoded_url = urllib.parse.quote(original_link)
-        final_link = f"https://t.me/iv?url={encoded_url}&rhash={rhash}"
+        preview_link = f"https://t.me/iv?url={encoded_url}&rhash={rhash}"
 
     # Get clean summary
     raw_summary = entry.get("summary", entry.get("description", ""))
@@ -102,10 +100,11 @@ def send_telegram_message(
         published_display = "Unknown Date"
 
     # Construct Message
-    # Note: We use final_link (IV) for the title, so users stay in Telegram.
+    # Note: We use original_link for the title so clicking it opens the browser.
+    # The IV button will appear because we force it in link_preview_options.
     message = (
         f"📰 <b>{blog_name}</b>\n\n"
-        f"<a href='{final_link}'><b>{title}</b></a>\n\n"
+        f"<a href='{original_link}'><b>{title}</b></a>\n\n"
         f"{summary_section}"
         f"📅 {published_display}\n"
     )
@@ -116,7 +115,7 @@ def send_telegram_message(
         "message_thread_id": topic_id,
         "text": message,
         "parse_mode": "HTML",
-        "link_preview_options": {"url": final_link},
+        "link_preview_options": {"url": preview_link},
     }
 
     try:

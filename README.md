@@ -101,6 +101,22 @@ To run this in your own repository, set the following **Repository Secrets** in 
     python scripts/crawl_checker.py
     ```
 
+## Instant View Support
+
+The RSS checker supports Telegram's **Instant View** for a cleaner reading experience.
+
+1.  Create a template at [instantview.telegram.org](https://instantview.telegram.org/).
+2.  Obtain your `rhash` from the "View in Telegram" link.
+3.  Add the `rhash` to the feed's entry in `config/blog_feeds.json`:
+    ```json
+    {
+      "name": "Simon Willison",
+      "url": "...",
+      "rhash": "..."
+    }
+    ```
+    *The title link remains pointing to the original website, while the preview button triggers the Instant View.*
+
 ## Spam Prevention
 
 *   **RSS/YouTube:** Filters posts by time (looking back only X hours).
