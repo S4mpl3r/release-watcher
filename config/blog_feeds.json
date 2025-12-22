@@ -2,7 +2,8 @@
   {
     "name": "Simon Willison",
     "url": "https://simonwillison.net/atom/everything/",
-    "check_hours": 4
+    "check_hours": 4,
+    "rhash": "2a0956220ea95c"
   },
   {
     "name": "Armin Ronacher",

@@ -62,7 +62,9 @@ def format_date_for_display(dt_utc: datetime) -> str:
         return "Unknown Date"
 
 
-def send_telegram_message(entry: dict, blog_name: str, dt_utc: datetime) -> bool:
+def send_telegram_message(
+    entry: dict, blog_name: str, dt_utc: datetime, rhash: str = None
+) -> bool:
     bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
     chat_id = os.environ.get("TELEGRAM_CHAT_ID")
     topic_id = os.environ.get("TELEGRAM_BLOG_TOPIC_ID")
@@ -72,7 +74,17 @@ def send_telegram_message(entry: dict, blog_name: str, dt_utc: datetime) -> bool
         return False
 
     title = entry.get("title", "No Title")
-    link = entry.get("link", "")
+    original_link = entry.get("link", "")
+    
+    # Instant View Logic
+    final_link = original_link
+    if rhash and original_link:
+        # Encode original link if necessary, but usually raw works with Telegram if clean.
+        # Ideally we should urllib.parse.quote it, but let's trust requests/telegram to handle basic URLs.
+        # Actually, best to be safe with urllib.parse.quote for the query param.
+        import urllib.parse
+        encoded_url = urllib.parse.quote(original_link)
+        final_link = f"https://t.me/iv?url={encoded_url}&rhash={rhash}"
 
     # Get clean summary
     raw_summary = entry.get("summary", entry.get("description", ""))
@@ -90,9 +102,10 @@ def send_telegram_message(entry: dict, blog_name: str, dt_utc: datetime) -> bool
         published_display = "Unknown Date"
 
     # Construct Message
+    # Note: We use final_link (IV) for the title, so users stay in Telegram.
     message = (
         f"📰 <b>{blog_name}</b>\n\n"
-        f"<a href='{link}'><b>{title}</b></a>\n\n"
+        f"<a href='{final_link}'><b>{title}</b></a>\n\n"
         f"{summary_section}"
         f"📅 {published_display}\n"
     )
@@ -103,7 +116,7 @@ def send_telegram_message(entry: dict, blog_name: str, dt_utc: datetime) -> bool
         "message_thread_id": topic_id,
         "text": message,
         "parse_mode": "HTML",
-        "link_preview_options": {"url": link},
+        "link_preview_options": {"url": final_link},
     }
 
     try:
@@ -157,6 +170,7 @@ def check_feeds() -> None:
         name = feed_config["name"]
         url = feed_config["url"]
         check_hours = feed_config.get("check_hours", 24)
+        rhash = feed_config.get("rhash")
 
         # LOGIC CHANGE:
         # If the blog is set to check every 24 hours (or more),
@@ -205,7 +219,7 @@ def check_feeds() -> None:
         for entry_date, entry, post_id in entries_to_send:
             print(f"New post found: {entry.get('title')}")
 
-            success = send_telegram_message(entry, name, entry_date)
+            success = send_telegram_message(entry, name, entry_date, rhash)
 
             if success:
                 history[name].append(post_id)
