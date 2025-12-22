@@ -103,7 +103,7 @@ def send_telegram_message(entry: dict, blog_name: str, dt_utc: datetime) -> bool
         "message_thread_id": topic_id,
         "text": message,
         "parse_mode": "HTML",
-        "disable_web_page_preview": False,
+        "link_preview_options": {"url": link},
     }
 
     try:
