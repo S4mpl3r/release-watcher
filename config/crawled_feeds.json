@@ -1,0 +1,12 @@
+[
+  {
+    "name": "Anthropic Engineering",
+    "url": "https://www.anthropic.com/engineering",
+    "extractor": "anthropic"
+  },
+  {
+    "name": "Anthropic Research",
+    "url": "https://www.anthropic.com/research",
+    "extractor": "anthropic"
+  }
+]

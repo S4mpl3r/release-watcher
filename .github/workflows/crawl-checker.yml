@@ -1,0 +1,61 @@
+name: Crawled Blog Checker
+
+on:
+  schedule:
+    - cron: "30 2,14 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  check-crawled-blogs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r scripts/requirements.txt
+
+      - name: Restore crawl history cache
+        id: restore-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: crawl_history.json
+          key: crawl-history-live
+      
+      - name: Initialize history if missing
+        run: |
+          if [ ! -f crawl_history.json ]; then
+            echo "{}" > crawl_history.json
+          fi
+
+      - name: Run Crawl Checker
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_BLOG_TOPIC_ID: ${{ secrets.TELEGRAM_BLOG_TOPIC_ID }}
+        run: |
+          python scripts/crawl_checker.py
+      
+      - name: Delete old cache
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh cache delete crawl-history-live || true
+
+      - name: Save crawl history cache
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: crawl_history.json
+          key: crawl-history-live
