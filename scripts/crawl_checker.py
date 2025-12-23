@@ -47,7 +47,7 @@ def parse_date_safe(date_str: str | None) -> datetime:
         return datetime.fromtimestamp(0, tz=timezone.utc)
 
 
-def send_telegram_message(entry: dict, blog_name: str) -> bool:
+def send_telegram_message(entry: dict, blog_name: str, rhash: str = None) -> bool:
     bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
     chat_id = os.environ.get("TELEGRAM_CHAT_ID")
     topic_id = os.environ.get("TELEGRAM_BLOG_TOPIC_ID")
@@ -57,9 +57,18 @@ def send_telegram_message(entry: dict, blog_name: str) -> bool:
         return False
 
     title = entry.get("title", "No Title")
-    link = entry.get("link", "")
+    original_link = entry.get("link", "")
     summary = entry.get("summary", "")
     published_str = entry.get("published_at", "")
+
+    # Instant View Logic
+    preview_link = original_link
+    if rhash and original_link:
+        # Encode original link if necessary
+        import urllib.parse
+
+        encoded_url = urllib.parse.quote(original_link)
+        preview_link = f"https://t.me/iv?url={encoded_url}&rhash={rhash}"
 
     # Parse Date
     published_display = "Unknown Date"
@@ -78,7 +87,7 @@ def send_telegram_message(entry: dict, blog_name: str) -> bool:
 
     message = (
         f"🕷 <b>{blog_name}</b>\n\n"
-        f"<a href='{link}'><b>{title}</b></a>\n\n"
+        f"<a href='{original_link}'><b>{title}</b></a>\n\n"
         f"{tags_str}"
         f"{summary_section}"
         f"📅 {published_display}\n"
@@ -90,7 +99,7 @@ def send_telegram_message(entry: dict, blog_name: str) -> bool:
         "message_thread_id": topic_id,
         "text": message,
         "parse_mode": "HTML",
-        "link_preview_options": {"url": link},
+        "link_preview_options": {"url": preview_link},
     }
 
     try:
@@ -133,6 +142,7 @@ def check_crawlers() -> None:
         name = feed_config["name"]
         url = feed_config["url"]
         extractor_key = feed_config.get("extractor")
+        rhash = feed_config.get("rhash")
 
         if extractor_key not in EXTRACTORS:
             print(f"Unknown extractor '{extractor_key}' for {name}")
@@ -206,7 +216,7 @@ def check_crawlers() -> None:
             print(f"New entry found: {item.get('title')}")
             # We don't check success for history here because we ALREADY added it to history above.
             # This ensures that even if sending fails, we don't spam again.
-            send_telegram_message(item, name)
+            send_telegram_message(item, name, rhash)
             time.sleep(1)
 
         # Keep history manageable

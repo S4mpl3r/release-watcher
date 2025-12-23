@@ -2,11 +2,13 @@
   {
     "name": "Anthropic Engineering",
     "url": "https://www.anthropic.com/engineering",
-    "extractor": "anthropic"
+    "extractor": "anthropic",
+    "rhash": "3f6c015534e402"
   },
   {
     "name": "Anthropic Research",
     "url": "https://www.anthropic.com/research",
-    "extractor": "anthropic"
+    "extractor": "anthropic",
+    "rhash": "3f6c015534e402"
   }
 ]
