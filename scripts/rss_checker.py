@@ -63,7 +63,7 @@ def format_date_for_display(dt_utc: datetime) -> str:
 
 
 def send_telegram_message(
-    entry: dict, blog_name: str, dt_utc: datetime, rhash: str = None
+    entry: dict, blog_name: str, dt_utc: datetime, rhash: str = None, force_slash: bool = False
 ) -> bool:
     bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
     chat_id = os.environ.get("TELEGRAM_CHAT_ID")
@@ -79,9 +79,14 @@ def send_telegram_message(
     # Instant View Logic
     preview_link = original_link
     if rhash and original_link:
+        iv_url = original_link
+        # Normalize: Add trailing slash if requested and missing
+        if force_slash and not iv_url.endswith("/"):
+             iv_url += "/"
+
         # Encode original link if necessary
         import urllib.parse
-        encoded_url = urllib.parse.quote(original_link)
+        encoded_url = urllib.parse.quote(iv_url)
         preview_link = f"https://t.me/iv?url={encoded_url}&rhash={rhash}"
 
     # Get clean summary
@@ -159,6 +164,7 @@ def check_feeds() -> None:
         name = feed_config["name"]
         url = feed_config["url"]
         rhash = feed_config.get("rhash")
+        force_slash = feed_config.get("force_slash", False)
 
         if name not in history:
             history[name] = []
@@ -197,7 +203,7 @@ def check_feeds() -> None:
         for entry_date, entry, post_id in entries_to_send:
             print(f"New post found: {entry.get('title')}")
 
-            success = send_telegram_message(entry, name, entry_date, rhash)
+            success = send_telegram_message(entry, name, entry_date, rhash, force_slash)
 
             if success:
                 history[name].append(post_id)
