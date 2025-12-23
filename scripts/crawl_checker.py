@@ -29,6 +29,24 @@ def format_date_for_display(dt_utc: datetime) -> str:
         return "Unknown Date"
 
 
+def parse_date_safe(date_str: str) -> datetime:
+    """
+    Parses a date string into a timezone-aware datetime object.
+    Defaults to epoch if parsing fails, to ensure sortability.
+    """
+    if not date_str:
+        return datetime.fromtimestamp(0, tz=timezone.utc)
+    try:
+        dt = date_parser.parse(date_str)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        else:
+            dt = dt.astimezone(timezone.utc)
+        return dt
+    except Exception:
+        return datetime.fromtimestamp(0, tz=timezone.utc)
+
+
 def send_telegram_message(entry: dict, blog_name: str) -> bool:
     bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
     chat_id = os.environ.get("TELEGRAM_CHAT_ID")
@@ -47,11 +65,7 @@ def send_telegram_message(entry: dict, blog_name: str) -> bool:
     published_display = "Unknown Date"
     if published_str:
         try:
-            dt = date_parser.parse(published_str)
-            if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
-            else:
-                dt = dt.astimezone(timezone.utc)
+            dt = parse_date_safe(published_str)
             published_display = format_date_for_display(dt)
         except Exception:
             pass
@@ -123,9 +137,6 @@ def check_crawlers() -> None:
 
         extractor = EXTRACTORS[extractor_key]
 
-        # Initialization check
-        # Treat as first run if not in history OR if history is empty (e.g. from a failed previous run)
-        is_first_run = name not in history or not history[name]
         if name not in history:
             history[name] = []
             
@@ -147,36 +158,59 @@ def check_crawlers() -> None:
             print(f"Extraction failed for {name}: {e}")
             continue
 
-        # First Run Logic:
-        # If this is the first run, we want to capture everything as "seen" EXCEPT the very latest item.
-        # This ensures the user gets ONE notification (for the newest post) to confirm it works,
-        # but doesn't get spammed with the entire history.
-        if is_first_run and items:
-            print(f"[{name}] First run detected. Marking {len(items)-1} older items as seen. Latest item will trigger notification.")
-            # Assuming items[0] is the newest. Add everything else to history.
-            for item in items[1:]:
-                lnk = item.get("link")
-                if lnk:
-                    history[name].append(lnk)
-            updated_history = True
+        if not items:
+            continue
 
-        # Reverse to process oldest first (assuming extractor returns newest first)
-        for item in reversed(items):
+        # 1. Sort by Date (Newest First)
+        # We try to trust published_at, but fall back to existing order if needed.
+        items.sort(key=lambda x: parse_date_safe(x.get("published_at")), reverse=True)
+
+        # 2. Identify New Items
+        new_items = []
+        for item in items:
             link = item.get("link")
             if not link:
                 continue
+            if link not in history[name]:
+                new_items.append(item)
+
+        if not new_items:
+            print(f"[{name}] No new items found.")
+            continue
+
+        print(f"[{name}] Found {len(new_items)} new items.")
+
+        # 3. Spam Protection Strategy
+        # If we see too many new items (> 3), it's likely a First Run, a Recovery, or a Reset.
+        # We only notify for the LATEST one, and mark the rest as seen silently.
+        to_send = []
+        
+        if len(new_items) > 3:
+            print(f"[{name}] ⚠️ Spam Protection Triggered! {len(new_items)} items is > 3.")
+            print(f"[{name}] Marking older {len(new_items)-1} items as seen silently.")
             
-            # Use link as unique ID
-            if link in history[name]:
-                continue
+            # The newest item is index 0 (because we sorted Newest First)
+            to_send = [new_items[0]]
             
+            # Add the rest to history immediately
+            for item in new_items[1:]:
+                history[name].append(item.get("link"))
+            updated_history = True # Mark dirty so we save even if send fails
+        else:
+            to_send = new_items
+
+        # 4. Send Notifications (Oldest -> Newest)
+        # to_send is currently [Newest, ..., Oldest] (subset of sorted items)
+        # We want to send chronologically.
+        for item in reversed(to_send):
             print(f"New entry found: {item.get('title')}")
             success = send_telegram_message(item, name)
+            
             if success:
-                history[name].append(link)
+                history[name].append(item.get("link"))
                 updated_history = True
                 time.sleep(1)
-
+        
         # Keep history manageable
         if len(history[name]) > 50:
             history[name] = history[name][-50:]
