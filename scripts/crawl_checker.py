@@ -124,8 +124,9 @@ def check_crawlers() -> None:
         extractor = EXTRACTORS[extractor_key]
 
         # Initialization check
-        is_first_run = name not in history
-        if is_first_run:
+        # Treat as first run if not in history OR if history is empty (e.g. from a failed previous run)
+        is_first_run = name not in history or not history[name]
+        if name not in history:
             history[name] = []
             
         print(f"Crawling {name} ({url})...")
@@ -157,6 +158,7 @@ def check_crawlers() -> None:
                 lnk = item.get("link")
                 if lnk:
                     history[name].append(lnk)
+            updated_history = True
 
         # Reverse to process oldest first (assuming extractor returns newest first)
         for item in reversed(items):

@@ -2,19 +2,16 @@
   {
     "name": "Simon Willison",
     "url": "https://simonwillison.net/atom/everything/",
-    "check_hours": 4,
     "rhash": "2a0956220ea95c"
   },
   {
     "name": "Armin Ronacher",
     "url": "https://lucumr.pocoo.org/feed.xml",
-    "check_hours": 24,
     "rhash": "31dce9fd2f33ae"
   },
   {
     "name": "Mario Zechner",
     "url": "https://mariozechner.at/rss.xml",
-    "check_hours": 24,
     "rhash": "67bac53cbe09b5"
   }
 ]

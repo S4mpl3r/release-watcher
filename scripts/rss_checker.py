@@ -151,44 +151,23 @@ def check_feeds() -> None:
     history = load_history()
     now_utc = datetime.now(timezone.utc)
 
-    # Get current time in Tehran to decide if we should run daily checks
-    now_tehran = datetime.now(TARGET_TZ)
-    current_hour_tehran = now_tehran.hour
-
-    # We consider it the "Morning Run" if it is between 5am and 7am Tehran time
-    # (Allowing wiggle room for GitHub Action delays)
-    is_morning_run = 5 <= current_hour_tehran < 7
-
-    print(
-        f"Current Tehran time: {now_tehran.strftime('%H:%M')}. Morning Run: {is_morning_run}"
-    )
+    print(f"Checking all {len(feeds)} feeds...")
 
     updated_history = False
 
     for feed_config in feeds:
         name = feed_config["name"]
         url = feed_config["url"]
-        check_hours = feed_config.get("check_hours", 24)
         rhash = feed_config.get("rhash")
-
-        # LOGIC CHANGE:
-        # If the blog is set to check every 24 hours (or more),
-        # ONLY check it if we are in the "Morning Run" window.
-        if check_hours >= 24 and not is_morning_run:
-            print(f"Skipping {name} (Scheduled for 6:00 AM only)")
-            continue
 
         if name not in history:
             history[name] = []
 
-        # SAFETY CHANGE:
-        # If we check every 4 hours, looking back exactly 4 hours + 1 is risky.
-        # If GitHub delays by 10 mins, you might miss a post.
-        # Since we have a history file to prevent duplicates,
-        # we can look back further (e.g., 3x the interval) to be safe.
-        lookback_hours = check_hours * 3
+        # Use a fixed 48-hour lookback window for all feeds.
+        # Since we track history, duplicates won't be sent.
+        lookback_hours = 48
 
-        print(f"Checking {name} (Lookback window: {lookback_hours}h)...")
+        print(f"Checking {name}...")
 
         try:
             feed = feedparser.parse(url)
@@ -226,7 +205,7 @@ def check_feeds() -> None:
                 time.sleep(1)
 
         # Keep history manageable
-        if len(history[name]) > 50:  # Increased buffer slightly
+        if len(history[name]) > 50:
             history[name] = history[name][-50:]
 
     if updated_history:
