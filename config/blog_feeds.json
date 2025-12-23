@@ -13,6 +13,7 @@
     "name": "Mario Zechner",
     "url": "https://mariozechner.at/rss.xml",
     "rhash": "67bac53cbe09b5",
-    "force_slash": true
+    "force_slash": true,
+    "cache_burst": true
   }
 ]

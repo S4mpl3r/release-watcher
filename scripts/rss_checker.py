@@ -63,7 +63,12 @@ def format_date_for_display(dt_utc: datetime) -> str:
 
 
 def send_telegram_message(
-    entry: dict, blog_name: str, dt_utc: datetime, rhash: str = None, force_slash: bool = False
+    entry: dict,
+    blog_name: str,
+    dt_utc: datetime,
+    rhash: str = None,
+    force_slash: bool = False,
+    cache_burst: bool = False,
 ) -> bool:
     bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
     chat_id = os.environ.get("TELEGRAM_CHAT_ID")
@@ -75,17 +80,23 @@ def send_telegram_message(
 
     title = entry.get("title", "No Title")
     original_link = entry.get("link", "")
-    
+
     # Instant View Logic
     preview_link = original_link
     if rhash and original_link:
         iv_url = original_link
         # Normalize: Add trailing slash if requested and missing
         if force_slash and not iv_url.endswith("/"):
-             iv_url += "/"
+            iv_url += "/"
+
+        # Cache Burst: Add timestamp to force fresh fetch
+        if cache_burst:
+            separator = "&" if "?" in iv_url else "?"
+            iv_url += f"{separator}iv_force={int(time.time())}"
 
         # Encode original link if necessary
         import urllib.parse
+
         encoded_url = urllib.parse.quote(iv_url)
         preview_link = f"https://t.me/iv?url={encoded_url}&rhash={rhash}"
 
@@ -165,6 +176,7 @@ def check_feeds() -> None:
         url = feed_config["url"]
         rhash = feed_config.get("rhash")
         force_slash = feed_config.get("force_slash", False)
+        cache_burst = feed_config.get("cache_burst", False)
 
         if name not in history:
             history[name] = []
@@ -203,7 +215,9 @@ def check_feeds() -> None:
         for entry_date, entry, post_id in entries_to_send:
             print(f"New post found: {entry.get('title')}")
 
-            success = send_telegram_message(entry, name, entry_date, rhash, force_slash)
+            success = send_telegram_message(
+                entry, name, entry_date, rhash, force_slash, cache_burst
+            )
 
             if success:
                 history[name].append(post_id)
