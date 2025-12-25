@@ -64,7 +64,6 @@ def send_telegram_message(paper, matched_keywords: list, search_name: str) -> bo
     abs_link = paper.entry_id
 
     message = (
-        f"🎓 <b>{search_name}</b>\n\n"
         f"<b>{title}</b>\n\n"
         f"<i>{abstract_excerpt}</i>\n\n"
         f"🏷 {tags}\n"
@@ -78,7 +77,7 @@ def send_telegram_message(paper, matched_keywords: list, search_name: str) -> bo
         "message_thread_id": topic_id,
         "text": message,
         "parse_mode": "HTML",
-        "link_preview_options": {"url": pdf_link},
+        "link_preview_options": {"url": abs_link},
     }
 
     try:
