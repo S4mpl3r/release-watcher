@@ -8,6 +8,7 @@ An automated monitoring system powered by GitHub Actions that tracks software re
 *   **RSS Blogs:** Monitors blog feeds and notifies on new posts.
 *   **YouTube:** Tracks new video uploads (filters out Shorts).
 *   **Crawled Feeds:** Custom scrapers for blogs that lack RSS feeds (e.g., Anthropic).
+*   **ArXiv Research:** Monitors new papers in AI/ML categories with keyword filtering.
 *   **State Management:** Uses GitHub Actions Cache to prevent duplicate notifications.
 *   **Topic Support:** Routes different types of content to specific Telegram Topics.
 
@@ -72,6 +73,21 @@ Designed for sites without RSS feeds.
     2.  Implement an `extract(html_content)` method that returns a list of dictionaries.
     3.  Import and register it in `scripts/crawl_checker.py` under the `EXTRACTORS` dictionary.
 
+### 5. ArXiv Paper Watcher
+Monitors new research papers in specified categories (e.g., AI, ML).
+*   **Workflow:** `.github/workflows/arxiv-checker.yml`
+*   **Script:** `scripts/arxiv_checker.py`
+*   **Schedule:** 06:30 AM & 06:30 PM.
+*   **How to Expand:**
+    Add a search query to `config/arxiv_queries.json`:
+    ```json
+    {
+      "name": "Agents Research",
+      "search_query": "cat:cs.AI AND abs:Agent",
+      "keywords": ["Autonomous", "Reasoning"]
+    }
+    ```
+
 ## Setup & Secrets
 
 To run this in your own repository, set the following **Repository Secrets** in GitHub:
@@ -83,6 +99,7 @@ To run this in your own repository, set the following **Repository Secrets** in 
 | `TELEGRAM_RELEASE_TOPIC_ID` | Topic ID for Release notifications |
 | `TELEGRAM_BLOG_TOPIC_ID` | Topic ID for Blog/RSS notifications |
 | `TELEGRAM_YOUTUBE_TOPIC_ID` | Topic ID for YouTube notifications |
+| `TELEGRAM_ARXIV_TOPIC_ID` | Topic ID for ArXiv notifications |
 
 ## Local Development
 
@@ -93,10 +110,18 @@ To run this in your own repository, set the following **Repository Secrets** in 
     uv pip install -r scripts/requirements.txt
     ```
 
-2.  **Run Scripts:**
+2. **Run Scripts:**
+
     Set your environment variables (e.g., in a `.env` file) and run:
+
     ```bash
+
     python scripts/crawl_checker.py
+
+    # OR using uv
+
+    uv run scripts/arxiv_checker.py
+
     ```
 
 ## Instant View Support
@@ -119,5 +144,6 @@ The RSS and Crawled feed checkers support Telegram's **Instant View** for a clea
 
 *   **RSS/YouTube:** Filters posts by time (looking back 30-48 hours) and checks against a history cache to prevent duplicates.
 *   **Crawlers:** Includes a "First Run Silent Mode" for old posts. If a feed is new, it populates the history with all items but only sends notifications for those published in the last 24 hours.
+*   **ArXiv:** Tracks history of all processed papers. Limits notifications to 5 per run (drip-feed) to avoid floods, and uses regex word boundaries for precise keyword matching.
 *   **Releases:** Tracks the latest tag. Only sends a notification when the tag changes (or on the first run).
 *   **State Management:** All workflows use GitHub Actions Cache to persist history between runs.

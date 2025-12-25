@@ -1,0 +1,12 @@
+[
+  {
+    "name": "AI & LLMs",
+    "search_query": "cat:cs.CL OR cat:cs.LG OR cat:cs.AI",
+    "keywords": [
+      "Continual Learning",
+      "Context Engineering",
+      "Lifelong Learning",
+      "In-Context Learning"
+    ]
+  }
+]

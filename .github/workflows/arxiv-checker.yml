@@ -1,0 +1,61 @@
+name: ArXiv Paper Watcher
+
+on:
+  schedule:
+    - cron: "0 3,15 * * *" # Run at 03:00 and 15:00 UTC (30 mins after Crawl Checker)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  check-arxiv:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r scripts/requirements.txt
+
+      - name: Restore arXiv history cache
+        id: restore-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: arxiv_history.json
+          key: arxiv-history-live
+      
+      - name: Initialize history if missing
+        run: |
+          if [ ! -f arxiv_history.json ]; then
+            echo "[]" > arxiv_history.json
+          fi
+
+      - name: Run ArXiv Checker
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_ARXIV_TOPIC_ID: ${{ secrets.TELEGRAM_ARXIV_TOPIC_ID }}
+        run: |
+          python scripts/arxiv_checker.py
+      
+      - name: Delete old cache
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh cache delete arxiv-history-live || true
+
+      - name: Save arXiv history cache
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: arxiv_history.json
+          key: arxiv-history-live

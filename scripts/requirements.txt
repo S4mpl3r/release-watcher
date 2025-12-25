@@ -4,3 +4,4 @@ python-dateutil
 beautifulsoup4
 tzdata
 google-genai
+arxiv
