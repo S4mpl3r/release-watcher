@@ -5,8 +5,8 @@ An automated monitoring system powered by GitHub Actions that tracks software re
 ## Features
 
 *   **GitHub Releases:** Tracks new tags/releases for specified repositories.
-*   **RSS Blogs:** Monitors blog feeds with intelligent scheduling (daily vs. frequent checks).
-*   **YouTube:** Tracks new video uploads.
+*   **RSS Blogs:** Monitors blog feeds and notifies on new posts.
+*   **YouTube:** Tracks new video uploads (filters out Shorts).
 *   **Crawled Feeds:** Custom scrapers for blogs that lack RSS feeds (e.g., Anthropic).
 *   **State Management:** Uses GitHub Actions Cache to prevent duplicate notifications.
 *   **Topic Support:** Routes different types of content to specific Telegram Topics.
@@ -36,11 +36,9 @@ The system is divided into four main workflows. To add new content, you primaril
     ```json
     {
       "name": "Blog Name",
-      "url": "https://example.com/feed.xml",
-      "check_hours": 24
+      "url": "https://example.com/feed.xml"
     }
     ```
-    *Note: Feeds with `check_hours: 24` are only checked during the "Morning Run" (5 AM - 7 AM).*
 
 ### 3. YouTube Checker
 *   **Workflow:** `.github/workflows/youtube-checker.yml`
@@ -103,14 +101,14 @@ To run this in your own repository, set the following **Repository Secrets** in 
 
 ## Instant View Support
 
-The RSS checker supports Telegram's **Instant View** for a cleaner reading experience.
+The RSS and Crawled feed checkers support Telegram's **Instant View** for a cleaner reading experience.
 
 1.  Create a template at [instantview.telegram.org](https://instantview.telegram.org/).
 2.  Obtain your `rhash` from the "View in Telegram" link.
-3.  Add the `rhash` to the feed's entry in `config/blog_feeds.json`:
+3.  Add the `rhash` to the feed's entry in `config/blog_feeds.json` (or `config/crawled_feeds.json`):
     ```json
     {
-      "name": "Simon Willison",
+      "name": "Anthropic Research",
       "url": "...",
       "rhash": "..."
     }
@@ -119,5 +117,7 @@ The RSS checker supports Telegram's **Instant View** for a cleaner reading exper
 
 ## Spam Prevention
 
-*   **RSS/YouTube:** Filters posts by time (looking back only X hours).
-*   **Crawlers:** Includes a "First Run Silent Mode". If a feed has no history, it populates the database and only sends the latest entry.
+*   **RSS/YouTube:** Filters posts by time (looking back 30-48 hours) and checks against a history cache to prevent duplicates.
+*   **Crawlers:** Includes a "First Run Silent Mode" for old posts. If a feed is new, it populates the history with all items but only sends notifications for those published in the last 24 hours.
+*   **Releases:** Tracks the latest tag. Only sends a notification when the tag changes (or on the first run).
+*   **State Management:** All workflows use GitHub Actions Cache to persist history between runs.
