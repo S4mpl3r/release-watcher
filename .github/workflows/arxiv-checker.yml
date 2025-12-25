@@ -1,4 +1,4 @@
-name: ArXiv Paper Watcher
+name: ArXiv Paper Checker
 
 on:
   schedule:
