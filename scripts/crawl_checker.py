@@ -191,17 +191,15 @@ def check_crawlers() -> None:
             if link in history[name]:
                 continue
 
-            # It is NEW. Add to history immediately (cache it).
-            history[name].append(link)
-            updated_history = True
-
             # Check Age: Only notify if it's recent (< 24 hours)
             published_at = parse_date_safe(item.get("published_at"))
             if published_at > cutoff_time:
+                # Recent item: queue for sending
                 to_send.append(item)
             else:
-                # Older item, just caching it silently
-                pass
+                # Older item: just cache it silently so we don't process it again
+                history[name].append(link)
+                updated_history = True
 
         if not to_send:
             print(f"[{name}] No new recent items found.")
@@ -214,10 +212,12 @@ def check_crawlers() -> None:
         # We want to send chronologically.
         for item in reversed(to_send):
             print(f"New entry found: {item.get('title')}")
-            # We don't check success for history here because we ALREADY added it to history above.
-            # This ensures that even if sending fails, we don't spam again.
-            send_telegram_message(item, name, rhash)
-            time.sleep(1)
+            
+            if send_telegram_message(item, name, rhash):
+                # Only add to history if sent successfully
+                history[name].append(item.get("link"))
+                updated_history = True
+                time.sleep(1)
 
         # Keep history manageable
         if len(history[name]) > 50:
