@@ -77,7 +77,7 @@ def send_telegram_message(paper, matched_keywords: list, search_name: str) -> bo
         "message_thread_id": topic_id,
         "text": message,
         "parse_mode": "HTML",
-        "link_preview_options": {"url": abs_link},
+        "link_preview_options": {"url": pdf_link},
     }
 
     try:
@@ -141,9 +141,9 @@ def check_arxiv() -> None:
         # Search for recent papers sorted by submission date
         search = arxiv.Search(
             query=query_str,
-            max_results=100, # Fetch a larger batch to filter locally and ensure coverage
+            max_results=100,  # Fetch a larger batch to filter locally and ensure coverage
             sort_by=arxiv.SortCriterion.SubmittedDate,
-            sort_order=arxiv.SortOrder.Descending
+            sort_order=arxiv.SortOrder.Descending,
         )
 
         try:
