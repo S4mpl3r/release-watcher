@@ -15,5 +15,29 @@
     "rhash": "67bac53cbe09b5",
     "force_slash": true,
     "cache_burst": true
+  },
+  {
+    "name": "Sean Goedecke",
+    "url": "https://www.seangoedecke.com/rss.xml"
+  },
+  {
+    "name": "Mitchell Hashimoto",
+    "url": "https://mitchellh.com/feed.xml"
+  },
+  {
+    "name": "matduggan",
+    "url": "https://matduggan.com/rss/"
+  },
+  {
+    "name": "Tom Renner",
+    "url": "https://tomrenner.com/index.xml"
+  },
+  {
+    "name": "Gary Marcus",
+    "url": "https://garymarcus.substack.com/feed"
+  },
+  {
+    "name": "timsh",
+    "url": "https://timsh.org/rss/"
   }
 ]
