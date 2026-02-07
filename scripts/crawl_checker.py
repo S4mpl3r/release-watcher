@@ -47,7 +47,9 @@ def parse_date_safe(date_str: str | None) -> datetime:
         return datetime.fromtimestamp(0, tz=timezone.utc)
 
 
-def send_telegram_message(entry: dict, blog_name: str, rhash: str = None) -> bool:
+def send_telegram_message(
+    entry: dict, blog_name: str, rhash: str | None = None
+) -> bool:
     bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
     chat_id = os.environ.get("TELEGRAM_CHAT_ID")
     topic_id = os.environ.get("TELEGRAM_BLOG_TOPIC_ID")
@@ -136,7 +138,7 @@ def check_crawlers() -> None:
     updated_history = False
 
     now_utc = datetime.now(timezone.utc)
-    cutoff_time = now_utc - timedelta(hours=24)
+    cutoff_time = now_utc - timedelta(hours=48)
 
     for feed_config in feeds:
         name = feed_config["name"]
@@ -191,15 +193,13 @@ def check_crawlers() -> None:
             if link in history[name]:
                 continue
 
-            # Check Age: Only notify if it's recent (< 24 hours)
+            # Check Age: Only notify if it's recent (< 48 hours)
             published_at = parse_date_safe(item.get("published_at"))
             if published_at > cutoff_time:
                 # Recent item: queue for sending
                 to_send.append(item)
-            else:
-                # Older item: just cache it silently so we don't process it again
-                history[name].append(link)
-                updated_history = True
+            # Note: Older items are NOT added to history here - they should be
+            # processed if they become recent enough (e.g., after a missed run)
 
         if not to_send:
             print(f"[{name}] No new recent items found.")
@@ -212,7 +212,7 @@ def check_crawlers() -> None:
         # We want to send chronologically.
         for item in reversed(to_send):
             print(f"New entry found: {item.get('title')}")
-            
+
             if send_telegram_message(item, name, rhash):
                 # Only add to history if sent successfully
                 history[name].append(item.get("link"))
