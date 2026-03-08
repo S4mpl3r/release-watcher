@@ -10,6 +10,7 @@ An automated monitoring system powered by GitHub Actions that tracks software re
 *   **Crawled Feeds:** Custom scrapers for blogs that lack RSS feeds (e.g., Anthropic).
 *   **ArXiv Research:** Monitors new papers in AI/ML categories with keyword filtering.
 *   **X / Twitter:** Tracks new posts from configured accounts and forwards them to a Telegram topic.
+*   **Upstream File Watcher:** Monitors RSSHub's X `constants.ts` for upstream breaking changes.
 *   **State Management:** Uses GitHub Actions Cache to prevent duplicate notifications.
 *   **Topic Support:** Routes different types of content to specific Telegram Topics.
 
@@ -93,6 +94,12 @@ Monitors new research papers in specified categories (e.g., AI, ML).
 *   **Script:** `scripts/x_checker.py`
 *   **Schedule:** Every 15 minutes.
 *   **Configuration:** The watched X account is provided via the `X_ACCOUNT` repository secret.
+
+### 7. Upstream Constants Checker
+*   **Workflow:** `.github/workflows/upstream-constants-checker.yml`
+*   **Script:** `scripts/upstream_constants_checker.py`
+*   **Schedule:** Twice daily.
+*   **Purpose:** Alerts the release topic when RSSHub's X `constants.ts` changes upstream.
     ```
 
 ## Setup & Secrets

@@ -1,0 +1,65 @@
+name: Upstream Constants Checker
+
+on:
+  schedule:
+    - cron: "0 3,15 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: upstream-constants-checker
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  check-upstream-constants:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r scripts/requirements.txt
+
+      - name: Restore upstream constants history cache
+        id: restore-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: upstream_constants_history.json
+          key: upstream-constants-history-live
+
+      - name: Initialize history if missing
+        run: |
+          if [ ! -f upstream_constants_history.json ]; then
+            echo '{}' > upstream_constants_history.json
+          fi
+
+      - name: Run upstream constants checker
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_RELEASE_TOPIC_ID: ${{ secrets.TELEGRAM_RELEASE_TOPIC_ID }}
+        run: |
+          python scripts/upstream_constants_checker.py
+
+      - name: Delete old cache
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh cache delete upstream-constants-history-live || true
+
+      - name: Save upstream constants history cache
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: upstream_constants_history.json
+          key: upstream-constants-history-live
