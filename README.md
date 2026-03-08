@@ -9,6 +9,7 @@ An automated monitoring system powered by GitHub Actions that tracks software re
 *   **YouTube:** Tracks new video uploads (filters out Shorts).
 *   **Crawled Feeds:** Custom scrapers for blogs that lack RSS feeds (e.g., Anthropic).
 *   **ArXiv Research:** Monitors new papers in AI/ML categories with keyword filtering.
+*   **X / Twitter:** Tracks new posts from configured accounts and forwards them to a Telegram topic.
 *   **State Management:** Uses GitHub Actions Cache to prevent duplicate notifications.
 *   **Topic Support:** Routes different types of content to specific Telegram Topics.
 
@@ -86,6 +87,12 @@ Monitors new research papers in specified categories (e.g., AI, ML).
       "search_query": "cat:cs.AI AND abs:Agent",
       "keywords": ["Autonomous", "Reasoning"]
     }
+
+### 6. X Checker
+*   **Workflow:** `.github/workflows/x-checker.yml`
+*   **Script:** `scripts/x_checker.py`
+*   **Schedule:** Every 15 minutes.
+*   **Configuration:** The watched X account is provided via the `X_ACCOUNT` repository secret.
     ```
 
 ## Setup & Secrets
@@ -100,6 +107,9 @@ To run this in your own repository, set the following **Repository Secrets** in 
 | `TELEGRAM_BLOG_TOPIC_ID` | Topic ID for Blog/RSS notifications |
 | `TELEGRAM_YOUTUBE_TOPIC_ID` | Topic ID for YouTube notifications |
 | `TELEGRAM_ARXIV_TOPIC_ID` | Topic ID for ArXiv notifications |
+| `TELEGRAM_X_TOPIC_ID` | Topic ID for X notifications |
+| `X_AUTH_TOKEN` | `auth_token` cookie value from a logged-in X session |
+| `X_ACCOUNT` | X account screen name to watch, without `@` |
 
 ## Local Development
 
