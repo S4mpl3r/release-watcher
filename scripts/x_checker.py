@@ -3,6 +3,7 @@ import html
 import json
 import os
 import time
+from typing import Any
 
 import httpx
 
@@ -131,7 +132,7 @@ def get_cookie(client: httpx.Client, name: str) -> str | None:
     return None
 
 
-def client_cookies(client: httpx.Client) -> dict[str, str]:
+def client_cookies(client: httpx.Client) -> dict[str, Any]:
     return {
         cookie.name: cookie.value
         for cookie in client.cookies.jar
@@ -608,6 +609,32 @@ def send_media(client: httpx.Client, topic_id: str, tweet: dict) -> None:
     )
 
 
+def send_error(
+    client: httpx.Client, topic_id: str, tweet_url: str, error: Exception
+) -> None:
+    """Send an error message to Telegram for a failed tweet."""
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+    if not chat_id:
+        return  # Can't send without chat_id, silently skip
+
+    text = (
+        f"Failed to forward tweet\n\n"
+        f"<code>{html.escape(tweet_url)}</code>\n\n"
+        f"<pre>{html.escape(str(error)[:500])}</pre>"
+    )
+    payload = {
+        "chat_id": chat_id,
+        "message_thread_id": topic_id,
+        "text": text,
+        "parse_mode": "HTML",
+    }
+    try:
+        telegram_request(client, "sendMessage", payload)
+        time.sleep(TELEGRAM_SEND_DELAY_SECONDS)
+    except Exception:
+        pass  # Don't crash if error reporting fails
+
+
 def send_text(client: httpx.Client, topic_id: str, tweet: dict) -> None:
     chat_id = os.environ.get("TELEGRAM_CHAT_ID")
     if not chat_id:
@@ -703,13 +730,23 @@ def process_account(
         save_account_state(history, account_key(account), state)
         return x_client
 
-    for tweet in new_posts:
-        forward_tweet(tg_client, topic_id, tweet)
-        state["last_seen_id"] = tweet["id"]
-        state.setdefault("recent_ids", []).append(tweet["id"])
+    # Save state before sending to prevent duplicates on failure
+    if new_posts:
+        state["last_seen_id"] = new_posts[-1]["id"]
+        state.setdefault("recent_ids", []).extend(t["id"] for t in new_posts)
+        state["recent_ids"] = list(dict.fromkeys(state["recent_ids"]))[
+            -RECENT_IDS_TO_KEEP:
+        ]
         state["initialized"] = True
         save_account_state(history, account_key(account), state)
-        print(f"Forwarded {tweet['url']}")
+
+    for tweet in new_posts:
+        try:
+            forward_tweet(tg_client, topic_id, tweet)
+            print(f"Forwarded {tweet['url']}")
+        except Exception as exc:
+            print(f"Failed to forward {tweet['url']}: {exc}")
+            send_error(tg_client, topic_id, tweet["url"], exc)
 
     return x_client
 
